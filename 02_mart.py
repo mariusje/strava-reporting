@@ -98,12 +98,14 @@ df['sk_time'] = df['date'].dt.strftime('%Y%m%d')
 df['year'] = df['date'].dt.year
 df['month'] = df['date'].dt.month
 df['day'] = df['date'].dt.day
-
-df = df.drop('date', axis=1)
+df['date'] = df['date'].dt.date
+#print(df.dtypes)
+#df = df.drop('date', axis=1)
 
 dim_time = spark.createDataFrame(df)
 
 dim_time.write.format("delta").mode("overwrite").saveAsTable("dbtestzwift_dim_time")
+# bruk .option("overwriteSchema", "true") for å lagre med endret skjema
 
 # COMMAND ----------
 

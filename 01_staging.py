@@ -1,5 +1,5 @@
 # Databricks notebook source
-pip install requests
+#pip install requests
 
 # COMMAND ----------
 
