@@ -5,7 +5,8 @@
 
 spark.sql("CREATE CATALOG IF NOT EXISTS strava_catalog")
 spark.sql("USE CATALOG strava_catalog")
-spark.sql("GRANT CREATE SCHEMA, CREATE TABLE, CREATE VIEW, USE CATALOG ON CATALOG strava_catalog TO `account users`")
+spark.sql("GRANT CREATE SCHEMA, CREATE TABLE, USE CATALOG ON CATALOG strava_catalog TO `account users`")
+#spark.sql("GRANT CREATE SCHEMA, CREATE TABLE, CREATE VIEW, USE CATALOG ON CATALOG strava_catalog TO `account users`")
 
 # COMMAND ----------
 
@@ -82,6 +83,36 @@ from pandas.io.json import json_normalize
 # COMMAND ----------
 
 activities = json_normalize(my_dataset)
+
+# COMMAND ----------
+
+# TESTING
+
+#from pyspark.sql.types import *
+
+#testmj_activities = activities.head(10)
+
+#testmj_activities.display()
+
+#cols = [
+#        'id',
+#    'start_date',
+#    'name'
+#]
+
+#testmj_activities_2 = testmj_activities[cols]
+
+#testmj_activities_2.display()
+
+#testmj_schema = StructType([
+#    StructField("id",LongType(),True),
+#    StructField("start_date",StringType(),True),
+#    StructField("name",StringType(),True)
+#])
+
+#testmj_activities_3 = spark.createDataFrame(testmj_activities_2, testmj_schema)
+
+#testmj_activities_3.display()
 
 # COMMAND ----------
 
@@ -162,7 +193,7 @@ schema = StructType([
     StructField("total_elevation_gain",FloatType(),True),
     StructField("type",StringType(),True),
     StructField("sport_type",StringType(),True),
-    StructField("id",IntegerType(),True),
+    StructField("id",LongType(),True),
     StructField("start_date",StringType(),True),
     StructField("start_date_local",StringType(),True),
     StructField("timezone",StringType(),True),
@@ -195,7 +226,7 @@ schema = StructType([
     StructField("display_hide_heartrate_option",BooleanType(),True),
     StructField("elev_high",FloatType(),True),
     StructField("elev_low",FloatType(),True),
-    StructField("upload_id",IntegerType(),True),
+    StructField("upload_id",LongType(),True),
     StructField("upload_id_str",StringType(),True),
     StructField("external_id",StringType(),True),
     StructField("from_accepted_tag",BooleanType(),True),
@@ -203,7 +234,7 @@ schema = StructType([
     StructField("total_photo_count",IntegerType(),True),
     StructField("has_kudoed",BooleanType(),True),
     StructField("suffer_score",FloatType(),True),
-    StructField("athlete.id",IntegerType(),True),
+    StructField("athlete.id",LongType(),True),
     StructField("athlete.resource_state",IntegerType(),True),
     StructField("map.id",StringType(),True),
     StructField("map.summary_polyline",StringType(),True),
@@ -219,3 +250,4 @@ schema = StructType([
 activities_df = spark.createDataFrame(activities, schema)
 
 activities_df.write.format("delta").mode("overwrite").saveAsTable("dbtestzwift_activity")
+# bruk .option("overwriteSchema", "true") for å lagre med endret skjema
