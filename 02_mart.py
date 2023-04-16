@@ -49,6 +49,13 @@ activity = (
 
 # COMMAND ----------
 
+spark.sql("USE strava_stage_schema")
+
+activity_zone = spark.read.table("dbtestzwift_activity_zone")
+distribution_bucket = spark.read.table("dbtestzwift_distribution_bucket")
+
+# COMMAND ----------
+
 from pyspark.sql.window import Window
 from pyspark.sql.functions import row_number
 
@@ -106,6 +113,150 @@ dim_time = spark.createDataFrame(df)
 
 dim_time.write.format("delta").mode("overwrite").saveAsTable("dbtestzwift_dim_time")
 # bruk .option("overwriteSchema", "true") for å lagre med endret skjema
+
+# COMMAND ----------
+
+# OBS - fortsett her....
+
+from pyspark.sql.window import Window
+from pyspark.sql.functions import row_number
+
+#print(activity_zone.count())
+#activity_zone.show()
+#print(distribution_bucket.count())
+#distribution_bucket.show()
+#act_zone_dist_buck_gb.sort("type","min").show()
+
+
+
+
+
+
+
+# COMMAND ----------
+
+window_spec = Window.partitionBy("activity_id","zone_seq_no").orderBy("min")
+distribution_bucket = distribution_bucket.withColumn("row_number",row_number().over(window_spec))
+
+# COMMAND ----------
+
+#activity_zone.show()
+
+# join activity_zone og distribution_bucket
+# finn antall rader per activity_id, zone_seq_no, type
+# finn unike forekomster av type og antall
+# meld feil hvis det finnes mer enn 1 rad for 1 eller flere typer
+# hvis ikke har man antall buckets per type - antakeligvis heartrate 5 og power 11
+
+# iterer over activity + buckets per type - iterator-teller i
+# opprett kolonne max_[i] og time_[i] (min også?)
+# når row_number = i sett max_[i] = max og time_[i] = time
+# opprett 1 tabell per type
+# i disse summeres max_[i] og time_[i] per activity_id
+# disse tabellen kan joines med activity og inkluderes i faktatabellen
+
+
+
+activity_zone_w_dist_bucket = activity_zone.join(
+    distribution_bucket,
+    [(activity_zone.activity_id == distribution_bucket.activity_id) & (activity_zone.zone_seq_no == distribution_bucket.zone_seq_no)],
+    "inner"
+).drop(distribution_bucket.activity_id).drop(distribution_bucket.zone_seq_no)
+
+activity_type_bucket_count = activity_zone_w_dist_bucket.groupBy("activity_id","zone_seq_no","type").count().select("type","count").distinct()
+type_w_multiple_buck_count = activity_type_bucket_count.groupBy("type").count().filter(col("count") > 1)
+if type_w_multiple_buck_count.count() > 0:
+    raise Exception("There occurences of activity types with different number of buckets.")
+
+# COMMAND ----------
+
+# NB - fjerne denne
+
+from pyspark.sql.functions import first
+from pandas import json_normalize
+
+activity_zone_buck = []
+
+activity_zone_w_dist_bucket_collect = activity_zone_w_dist_bucket.collect()
+i = 0
+
+for rows in activity_zone_w_dist_bucket_collect:
+    activity_type = rows.type
+    no_of_buck_df = activity_type_bucket_count.select("count").filter(activity_type_bucket_count.type == activity_type)
+    no_of_buck = no_of_buck_df.collect()[0][0]
+    activity_dict = rows.asDict()
+    min_buck = "min_" + str(rows.row_number)
+    max_buck = "max_" + str(rows.row_number)
+    time_buck = "time_" + str(rows.row_number)
+    activity_dict[min_buck] = rows.min
+    activity_dict[max_buck] = rows.max
+    activity_dict[time_buck] = rows.time
+    activity_zone_buck.append(activity_dict)
+    #i = i + 1
+    #if i > 50:
+    #    break
+
+activity_zone_buck_df = json_normalize(activity_zone_buck)
+#display(test_df)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import max
+
+activity_type_bucket_count.display()
+max_no_of_buck = activity_type_bucket_count.select(max('count')).collect()[0][0]
+print(max_no_of_buck)
+
+# COMMAND ----------
+
+sum_cols = []
+i = 0
+while i < max_no_of_buck:
+    i = i + 1
+    min_buck = "min_" + str(i)
+    max_buck = "max_" + str(i)
+    time_buck = "time_" + str(i)
+    activity_zone_w_dist_bucket = activity_zone_w_dist_bucket \
+        .withColumn(min_buck, when(activity_zone_w_dist_bucket.row_number == i, activity_zone_w_dist_bucket.min)) \
+        .withColumn(max_buck, when(activity_zone_w_dist_bucket.row_number == i, activity_zone_w_dist_bucket.max)) \
+        .withColumn(time_buck, when(activity_zone_w_dist_bucket.row_number == i, activity_zone_w_dist_bucket.time))
+    sum_cols.append(min_buck)
+    sum_cols.append(max_buck)
+    sum_cols.append(time_buck)
+
+# COMMAND ----------
+
+print(sum_cols)
+
+# COMMAND ----------
+
+from pyspark.sql.functions import sum
+
+sum_cols_expr = list([sum(c).alias(c) for c in sum_cols])
+
+# COMMAND ----------
+
+activity_zone_buck_agg = activity_zone_w_dist_bucket \
+    .groupBy('activity_id','zone_seq_no','score','type','resource_state','sensor_based','points','custom_zones') \
+    .agg(* sum_cols_expr)
+
+# COMMAND ----------
+
+activity_zone_buck_agg.display()
+
+# COMMAND ----------
+
+act_2 = activity.alias('activity').join(
+    activity_zone_buck_agg.alias('activity_zone_buck_agg'), 
+    [(activity.id == activity_zone_buck_agg.activity_id)],
+    how='leftouter'
+)
+
+# COMMAND ----------
+
+print(activity.count())
+print(activity_zone_buck_agg.count())
+print(act_2.count())
 
 # COMMAND ----------
 
@@ -212,6 +363,7 @@ ftr_activity = (
 )
 
 ftr_activity.write.format("delta").mode("overwrite").saveAsTable("dbtestzwift_ftr_activity")
+# bruk .option("overwriteSchema", "true") for å lagre med endret skjema
 
 # COMMAND ----------
 

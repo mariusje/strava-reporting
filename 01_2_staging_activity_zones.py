@@ -241,8 +241,8 @@ distribution_bucket.alias('distribution_bucket') \
 # COMMAND ----------
 
 # check no of rows in result tables
-#spark.sql("USE strava_stage_schema")
-#testmj_az = spark.read.table("dbtestzwift_activity_zone")
-#testmj_db = spark.read.table("dbtestzwift_distribution_bucket")
-#print(testmj_az.count())  #135
-#print(testmj_db.count())  #861
+spark.sql("USE strava_stage_schema")
+testmj_az = spark.read.table("dbtestzwift_activity_zone")
+testmj_db = spark.read.table("dbtestzwift_distribution_bucket")
+print(testmj_az.count())  #135 -  268 - 666 - 782 - 1152 - 1988 - 2042
+print(testmj_db.count())  #861 - 1724 - 4302 - 5062 - 7404 - 12268 - 12670
