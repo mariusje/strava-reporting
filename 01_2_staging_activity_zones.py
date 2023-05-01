@@ -31,11 +31,13 @@ activities_zones_url_last_part = "/zones"
 
 payload = {
     'client_id': "78457",
-    'client_secret': 'd33044b3258b6ae45e8000579cf683abd821b746',
+    'client_secret': '8d858f4aecfd3132dcb4f1b66e6e1e314303cae5',
     'refresh_token': '20dab2507bade463981b9604eca00d406af57924',
     'grant_type': "refresh_token",
     'f': 'json'
 }
+# old: '20dab2507bade463981b9604eca00d406af57924'
+# new: 'df528c432d854ed6151a77c5d888b2ae0aa28a3c'
 
 res = requests.post(auth_url, data=payload, verify=False)
 access_token = res.json()['access_token']
@@ -57,6 +59,12 @@ activity_zone_dist_id = activity_zone.select("activity_id").distinct()
 
 # COMMAND ----------
 
+spark.sql("USE strava_stage_schema")
+
+activity_wo_act_zone = spark.read.table("dbtestzwift_activity_wo_act_zone")
+
+# COMMAND ----------
+
 activity = activity.join(
     activity_zone_dist_id, 
     [activity.id == activity_zone_dist_id.activity_id], 
@@ -65,8 +73,17 @@ activity = activity.join(
 
 # COMMAND ----------
 
+activity = activity.join(
+    activity_wo_act_zone, 
+    [activity.id == activity_wo_act_zone.activity_id], 
+    how='left_anti'
+)
+
+# COMMAND ----------
+
 all_activities_zones = []
 all_distribution_buckets = []
+activity_wo_act_zone = []
 
 rows_looped = activity.select("id").collect()
 
@@ -89,10 +106,44 @@ for rows in rows_looped:
             all_distribution_buckets.extend(distribution_buckets)
             i = i + 1
         all_activities_zones.extend(my_dataset)
+        if len(my_dataset) == 0:
+            activity_wo_act_zone.append(activity_id)
     else:
         print(response.status_code)
         print(response)
         break
+
+# COMMAND ----------
+
+activity_wo_act_zone_df = spark.createDataFrame([(i,) for i in activity_wo_act_zone], ["activity_id"])
+
+# COMMAND ----------
+
+# initiate table
+
+#spark.sql("USE strava_stage_schema")
+#activity_wo_act_zone_df.write.format("delta").mode("overwrite").saveAsTable("dbtestzwift_activity_wo_act_zone")
+#spark.sql("TRUNCATE TABLE dbtestzwift_activity_wo_act_zone")
+
+# COMMAND ----------
+
+from delta.tables import *
+
+spark.sql("USE strava_stage_schema")
+
+activity_wo_act_zone = DeltaTable.forName(spark,"dbtestzwift_activity_wo_act_zone")
+
+activity_wo_act_zone.alias('activity_wo_act_zone') \
+.merge(
+    activity_wo_act_zone_df.alias('activity_wo_act_zone_df'),
+   'activity_wo_act_zone.activity_id = activity_wo_act_zone_df.activity_id'
+) \
+.whenNotMatchedInsert(values =
+{
+      "activity_id": "activity_wo_act_zone_df.activity_id"
+}
+) \
+.execute()
 
 # COMMAND ----------
 
@@ -105,6 +156,10 @@ activities_zones = json_normalize(all_activities_zones)
 distribution_buckets = json_normalize(all_distribution_buckets)
 
 # COMMAND ----------
+
+# Kan feile hvis det bare hentes aktiviteter uten activity zones
+# dbtestzwift_activity_wo_act_zone vil da oppdateres
+# slik at det kan gå bedre neste runde
 
 cols_act_zones = [
     'activity_id',
@@ -176,8 +231,6 @@ distribution_buckets_df = spark.createDataFrame(distribution_buckets, schema_dis
 
 # COMMAND ----------
 
-from delta.tables import *
-
 spark.sql("USE strava_stage_schema")
 
 activity_zone = DeltaTable.forName(spark,"dbtestzwift_activity_zone")
@@ -241,8 +294,8 @@ distribution_bucket.alias('distribution_bucket') \
 # COMMAND ----------
 
 # check no of rows in result tables
-spark.sql("USE strava_stage_schema")
-testmj_az = spark.read.table("dbtestzwift_activity_zone")
-testmj_db = spark.read.table("dbtestzwift_distribution_bucket")
-print(testmj_az.count())  #135 -  268 - 666 - 782 - 1152 - 1988 - 2042
-print(testmj_db.count())  #861 - 1724 - 4302 - 5062 - 7404 - 12268 - 12670
+#spark.sql("USE strava_stage_schema")
+#testmj_az = spark.read.table("dbtestzwift_activity_zone")
+#testmj_db = spark.read.table("dbtestzwift_distribution_bucket")
+#print(testmj_az.count())  #135 -  268 - 666 - 782 - 1152 - 1988 - 2042
+#print(testmj_db.count())  #861 - 1724 - 4302 - 5062 - 7404 - 12268 - 12670

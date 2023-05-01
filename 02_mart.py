@@ -133,7 +133,7 @@ activity_zone_w_dist_bucket = activity_zone.join(
 activity_type_bucket_count = activity_zone_w_dist_bucket.groupBy("activity_id","zone_seq_no","type").count().select("type","count").distinct().withColumnRenamed("type","zone_type").withColumnRenamed("count","bucket_count")
 type_w_multiple_buck_count = activity_type_bucket_count.groupBy("zone_type").count().filter(col("count") > 1)
 if type_w_multiple_buck_count.count() > 0:
-    raise Exception("There occurences of activity types with different number of buckets.")
+    raise Exception("There are occurences of activity types with different number of buckets.")
 
 # COMMAND ----------
 
@@ -180,7 +180,7 @@ for rows in activity_type_bucket_count_coll:
 
 # COMMAND ----------
 
-from pyspark.sql.functions import sum
+from pyspark.sql.functions import sum, max
 
 max_cols_expr = list([max(c).alias(c) for c in max_cols])
 sum_cols_expr = list([sum(c).alias(c) for c in sum_cols])
@@ -190,11 +190,9 @@ sum_cols_expr = list([sum(c).alias(c) for c in sum_cols])
 activity_zone_buck_agg = activity_zone_w_dist_bucket \
     .groupBy('activity_id') \
     .agg(* max_cols_expr + sum_cols_expr)
+#    .agg(* sum_cols_expr)
 
 # COMMAND ----------
-
-# NB - fortsett her - activity er endret, har fått flere felter
-# dette må oppdateres nedstrøms fra her
 
 activity = activity.alias('activity').join(
     activity_zone_buck_agg.alias('activity_zone_buck_agg'), 
@@ -204,7 +202,6 @@ activity = activity.alias('activity').join(
 
 # COMMAND ----------
 
-from pyspark.sql.functions import year,month,dayofmonth,hour,minute,second
 
 ftr_activity_tmp = (
     activity
@@ -234,9 +231,73 @@ ftr_activity_tmp = (
         "location_city",
         "location_state",
         "location_country",
-        "start_date_local"
+        "start_date_local",
+        "score_power",
+        "zone_type_power",
+        "resource_state_power",
+        "sensor_based_power",
+        "points_power",
+        "custom_zones_power",
+        "score_heartrate",
+        "zone_type_heartrate",
+        "resource_state_heartrate",
+        "sensor_based_heartrate",
+        "points_heartrate",
+        "custom_zones_heartrate",
+        "min_power1",
+        "max_power1",
+        "time_power1",
+        "min_power2",
+        "max_power2",
+        "time_power2",
+        "min_power3",
+        "max_power3",
+        "time_power3",
+        "min_power4",
+        "max_power4",
+        "time_power4",
+        "min_power5",
+        "max_power5",
+        "time_power5",
+        "min_power6",
+        "max_power6",
+        "time_power6",
+        "min_power7",
+        "max_power7",
+        "time_power7",
+        "min_power8",
+        "max_power8",
+        "time_power8",
+        "min_power9",
+        "max_power9",
+        "time_power9",
+        "min_power10",
+        "max_power10",
+        "time_power10",
+        "min_power11",
+        "max_power11",
+        "time_power11",
+        "min_heartrate1",
+        "max_heartrate1",
+        "time_heartrate1",
+        "min_heartrate2",
+        "max_heartrate2",
+        "time_heartrate2",
+        "min_heartrate3",
+        "max_heartrate3",
+        "time_heartrate3",
+        "min_heartrate4",
+        "max_heartrate4",
+        "time_heartrate4",
+        "min_heartrate5",
+        "max_heartrate5",
+        "time_heartrate5"
     )
 )
+
+# COMMAND ----------
+
+from pyspark.sql.functions import year,month,dayofmonth,hour,minute,second
 
 ftr_activity_tmp = ftr_activity_tmp.withColumn("start_year", year("start_date_local"))
 ftr_activity_tmp = ftr_activity_tmp.withColumn("start_month", month("start_date_local"))
@@ -302,12 +363,73 @@ ftr_activity = (
         "start_second",
         "sk_sport_type",
         "sk_geography",
-        "sk_time"
+        "sk_time",
+        "score_power",
+        "zone_type_power",
+        "resource_state_power",
+        "sensor_based_power",
+        "points_power",
+        "custom_zones_power",
+        "score_heartrate",
+        "zone_type_heartrate",
+        "resource_state_heartrate",
+        "sensor_based_heartrate",
+        "points_heartrate",
+        "custom_zones_heartrate",
+        "min_power1",
+        "max_power1",
+        "time_power1",
+        "min_power2",
+        "max_power2",
+        "time_power2",
+        "min_power3",
+        "max_power3",
+        "time_power3",
+        "min_power4",
+        "max_power4",
+        "time_power4",
+        "min_power5",
+        "max_power5",
+        "time_power5",
+        "min_power6",
+        "max_power6",
+        "time_power6",
+        "min_power7",
+        "max_power7",
+        "time_power7",
+        "min_power8",
+        "max_power8",
+        "time_power8",
+        "min_power9",
+        "max_power9",
+        "time_power9",
+        "min_power10",
+        "max_power10",
+        "time_power10",
+        "min_power11",
+        "max_power11",
+        "time_power11",
+        "min_heartrate1",
+        "max_heartrate1",
+        "time_heartrate1",
+        "min_heartrate2",
+        "max_heartrate2",
+        "time_heartrate2",
+        "min_heartrate3",
+        "max_heartrate3",
+        "time_heartrate3",
+        "min_heartrate4",
+        "max_heartrate4",
+        "time_heartrate4",
+        "min_heartrate5",
+        "max_heartrate5",
+        "time_heartrate5"
     )
 )
 
-ftr_activity.write.format("delta").mode("overwrite").saveAsTable("dbtestzwift_ftr_activity")
+#ftr_activity.write.format("delta").mode("overwrite").saveAsTable("dbtestzwift_ftr_activity")
 # bruk .option("overwriteSchema", "true") for å lagre med endret skjema
+ftr_activity.write.format("delta").mode("overwrite").option("overwriteSchema", "true").saveAsTable("dbtestzwift_ftr_activity")
 
 # COMMAND ----------
 
